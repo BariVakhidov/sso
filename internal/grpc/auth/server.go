@@ -4,16 +4,18 @@ import (
 	"context"
 	"errors"
 
+	"github.com/BariVakhidov/sso/internal/domain/models"
 	"github.com/BariVakhidov/sso/internal/services/auth"
 	ssov1 "github.com/BariVakhidov/ssoprotos/gen/go/sso"
 	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 const (
-	emptyValue = 0
+	emptyValue = ""
 )
 
 const (
@@ -23,15 +25,21 @@ const (
 	ErrUserIDRequired     = "userID is required"
 	ErrUserNotFound       = "user not found"
 	ErrUserExists         = "user already exists"
+	ErrAppExists          = "app already exists"
+	ErrAppNotFound        = "app not found"
+	ErrAppNameRequired    = "app name required"
+	ErrAppSecretRequired  = "app secret required"
 	ErrAppIDRequired      = "app_id is required"
 	ErrInternal           = "internal error"
 	ErrInvalidCredentials = "invalid credentials"
 )
 
 type Auth interface {
-	Login(ctx context.Context, email string, password string, appID int32) (token string, err error)
-	RegisterNewUser(ctx context.Context, email string, password string) (userID int64, err error)
-	IsAdmin(ctx context.Context, userID int64) (bool, error)
+	Login(ctx context.Context, email string, password string, appID uuid.UUID) (token string, err error)
+	RegisterNewUser(ctx context.Context, email string, password string) (userID uuid.UUID, err error)
+	IsAdmin(ctx context.Context, userID uuid.UUID) (bool, error)
+	CreateApp(ctx context.Context, name, secret string) (uuid.UUID, error)
+	App(ctx context.Context, name string) (models.App, error)
 }
 
 type serverAPI struct {
@@ -58,7 +66,7 @@ func (s *serverAPI) Register(ctx context.Context, req *ssov1.RegisterRequest) (*
 		return nil, status.Error(codes.Internal, ErrInternal)
 	}
 
-	return &ssov1.RegisterResponse{UserId: userID}, nil
+	return &ssov1.RegisterResponse{UserId: userID.String()}, nil
 }
 
 func (s *serverAPI) Login(ctx context.Context, req *ssov1.LoginRequest) (*ssov1.LoginResponse, error) {
@@ -66,7 +74,12 @@ func (s *serverAPI) Login(ctx context.Context, req *ssov1.LoginRequest) (*ssov1.
 		return nil, err
 	}
 
-	token, err := s.auth.Login(ctx, req.GetEmail(), req.GetPassword(), req.GetAppId())
+	appId, err := uuid.Parse(req.GetAppId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, ErrInvalidCredentials)
+	}
+
+	token, err := s.auth.Login(ctx, req.GetEmail(), req.GetPassword(), appId)
 	if err != nil {
 		if errors.Is(err, auth.ErrInvalidCredentials) {
 			return nil, status.Error(codes.InvalidArgument, ErrInvalidCredentials)
@@ -83,7 +96,12 @@ func (s *serverAPI) IsAdmin(ctx context.Context, req *ssov1.IsAdminRequest) (*ss
 		return nil, err
 	}
 
-	isAdmin, err := s.auth.IsAdmin(ctx, req.GetUserId())
+	userId, err := uuid.Parse(req.GetUserId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, ErrInvalidCredentials)
+	}
+
+	isAdmin, err := s.auth.IsAdmin(ctx, userId)
 	if err != nil {
 		if errors.Is(err, auth.ErrUserNotFound) {
 			return nil, status.Error(codes.NotFound, ErrUserNotFound)
@@ -93,6 +111,40 @@ func (s *serverAPI) IsAdmin(ctx context.Context, req *ssov1.IsAdminRequest) (*ss
 	}
 
 	return &ssov1.IsAdminResponse{IsAdmin: isAdmin}, nil
+}
+
+func (s *serverAPI) CreateApp(ctx context.Context, req *ssov1.CreateAppRequest) (*ssov1.CreateAppResponse, error) {
+	if err := s.validateCreateAppReq(req); err != nil {
+		return nil, err
+	}
+
+	appID, err := s.auth.CreateApp(ctx, req.GetName(), req.GetSecret())
+	if err != nil {
+		if errors.Is(err, auth.ErrAppExists) {
+			return nil, status.Error(codes.AlreadyExists, ErrAppExists)
+		}
+
+		return nil, status.Error(codes.Internal, ErrInternal)
+	}
+
+	return &ssov1.CreateAppResponse{AppId: appID.String()}, nil
+}
+
+func (s *serverAPI) App(ctx context.Context, req *ssov1.AppRequest) (*ssov1.AppResponse, error) {
+	if err := s.validateAppReq(req); err != nil {
+		return nil, err
+	}
+
+	app, err := s.auth.App(ctx, req.GetName())
+	if err != nil {
+		if errors.Is(err, auth.ErrAppNotFound) {
+			return nil, status.Error(codes.NotFound, ErrAppNotFound)
+		}
+
+		return nil, status.Error(codes.Internal, ErrInternal)
+	}
+
+	return &ssov1.AppResponse{AppId: app.ID.String(), Name: app.Name}, nil
 }
 
 func (s *serverAPI) validateLoginReq(req *ssov1.LoginRequest) error {
@@ -134,6 +186,26 @@ func (s *serverAPI) validateRegisterReq(req *ssov1.RegisterRequest) error {
 func (s *serverAPI) validateIsAdminReq(req *ssov1.IsAdminRequest) error {
 	if req.GetUserId() == emptyValue {
 		return status.Error(codes.InvalidArgument, ErrUserIDRequired)
+	}
+
+	return nil
+}
+
+func (s *serverAPI) validateCreateAppReq(req *ssov1.CreateAppRequest) error {
+	if req.GetName() == emptyValue {
+		return status.Error(codes.InvalidArgument, ErrAppNameRequired)
+	}
+
+	if req.GetSecret() == emptyValue {
+		return status.Error(codes.InvalidArgument, ErrAppSecretRequired)
+	}
+
+	return nil
+}
+
+func (s *serverAPI) validateAppReq(req *ssov1.AppRequest) error {
+	if req.GetName() == emptyValue {
+		return status.Error(codes.InvalidArgument, ErrAppNameRequired)
 	}
 
 	return nil

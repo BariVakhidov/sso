@@ -8,6 +8,7 @@ import (
 
 	"github.com/BariVakhidov/sso/internal/domain/models"
 	"github.com/BariVakhidov/sso/internal/storage"
+	"github.com/google/uuid"
 	"github.com/mattn/go-sqlite3"
 )
 
@@ -26,30 +27,27 @@ func New(storagePath string) (*Storage, error) {
 	return &Storage{db: db}, nil
 }
 
-func (s *Storage) SaveUser(ctx context.Context, email string, passHash []byte) (int64, error) {
+func (s *Storage) SaveUser(ctx context.Context, email string, passHash []byte) (models.User, error) {
 	const op = "storage.sqlite.SaveUser"
 
-	stmt, err := s.db.Prepare("INSERT INTO users(email, pass_hash) VALUES(?,?)")
+	stmt, err := s.db.Prepare("INSERT INTO users(id,email,pass_hash) VALUES(?,?,?) RETURNING id,email,pass_hash")
 	if err != nil {
-		return 0, fmt.Errorf("%s: %w", op, err)
+		return models.User{}, fmt.Errorf("%s: %w", op, err)
 	}
 
-	res, err := stmt.ExecContext(ctx, email, passHash)
-	if err != nil {
+	user := models.User{}
+
+	row := stmt.QueryRowContext(ctx, uuid.New(), email, passHash)
+	if err := row.Scan(&user.ID, &user.Email, &user.PassHash); err != nil {
 		var sqliteErr sqlite3.Error
 		if errors.As(err, &sqliteErr) && sqliteErr.ExtendedCode == sqlite3.ErrConstraintUnique {
-			return 0, fmt.Errorf("%s: %w", op, storage.ErrUserExists)
+			return models.User{}, fmt.Errorf("%s: %w", op, storage.ErrUserExists)
 		}
 
-		return 0, fmt.Errorf("%s: %w", op, err)
+		return models.User{}, fmt.Errorf("%s: %w", op, err)
 	}
 
-	lastInsertId, err := res.LastInsertId()
-	if err != nil {
-		return 0, fmt.Errorf("%s: %w", op, err)
-	}
-
-	return lastInsertId, nil
+	return user, nil
 }
 
 func (s *Storage) User(ctx context.Context, email string) (models.User, error) {
@@ -73,7 +71,7 @@ func (s *Storage) User(ctx context.Context, email string) (models.User, error) {
 	return user, nil
 }
 
-func (s *Storage) IsAdmin(ctx context.Context, userID int64) (bool, error) {
+func (s *Storage) IsAdmin(ctx context.Context, userID uuid.UUID) (bool, error) {
 	const op = "storage.sqlite.IsAdmin"
 	stmt, err := s.db.Prepare("SELECT is_admin FROM users WHERE id=?")
 	if err != nil {
@@ -93,7 +91,7 @@ func (s *Storage) IsAdmin(ctx context.Context, userID int64) (bool, error) {
 	return isAdmin, nil
 }
 
-func (s *Storage) App(ctx context.Context, appID int32) (models.App, error) {
+func (s *Storage) App(ctx context.Context, appID uuid.UUID) (models.App, error) {
 	const op = "storage.sqlite.App"
 
 	stmt, err := s.db.Prepare("SELECT id,name,secret FROM apps WHERE id=?")
@@ -107,6 +105,52 @@ func (s *Storage) App(ctx context.Context, appID int32) (models.App, error) {
 	if err := res.Scan(&app.ID, &app.Name, &app.Secret); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return models.App{}, fmt.Errorf("%s: %w", op, storage.ErrAppNotFound)
+		}
+
+		return models.App{}, fmt.Errorf("%s: %w", op, err)
+	}
+
+	return app, nil
+}
+
+func (s *Storage) FindApp(ctx context.Context, name string) (models.App, error) {
+	const op = "storage.sqlite.FindApp"
+
+	stmt, err := s.db.Prepare("SELECT id,name,secret FROM apps WHERE name=?")
+	if err != nil {
+		return models.App{}, fmt.Errorf("%s: %w", op, err)
+	}
+
+	res := stmt.QueryRowContext(ctx, name)
+
+	var app models.App
+	if err := res.Scan(&app.ID, &app.Name, &app.Secret); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return models.App{}, fmt.Errorf("%s: %w", op, storage.ErrAppNotFound)
+		}
+
+		return models.App{}, fmt.Errorf("%s: %w", op, err)
+	}
+
+	return app, nil
+}
+
+func (s *Storage) CreateApp(ctx context.Context, name string, secret string) (models.App, error) {
+	const op = "storage.sqlite.CreateApp"
+
+	stmt, err := s.db.Prepare("INSERT INTO apps(id,name,secret) VALUES(?,?,?) RETURNING id,name,secret")
+	if err != nil {
+		return models.App{}, fmt.Errorf("%s: %w", op, err)
+	}
+
+	res := stmt.QueryRowContext(ctx, uuid.New(), name, secret)
+
+	var app models.App
+	if err := res.Scan(&app.ID, &app.Name, &app.Secret); err != nil {
+		fmt.Println(err)
+		var sqliteErr sqlite3.Error
+		if errors.As(err, &sqliteErr) && sqliteErr.ExtendedCode == sqlite3.ErrConstraintUnique {
+			return models.App{}, fmt.Errorf("%s: %w", op, storage.ErrAppExists)
 		}
 
 		return models.App{}, fmt.Errorf("%s: %w", op, err)

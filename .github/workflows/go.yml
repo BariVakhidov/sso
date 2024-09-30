@@ -31,6 +31,13 @@ jobs:
       - name: Build
         run: go build -v ./cmd/sso
 
+      - name: Build migrator
+        run: go build -v ./cmd/migrator
+
+      - name: Run migrator
+        run: |
+          ./migrator --storage-path=./storage/sso.db --migrations-path=./migrations/
+
       - name: Run
         run: |
           nohup ./sso --config=./config/local.yml &

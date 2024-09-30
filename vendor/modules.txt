@@ -1,4 +1,4 @@
-# github.com/BariVakhidov/ssoprotos v0.0.0-20240916161619-1b640f85523c
+# github.com/BariVakhidov/ssoprotos v0.0.4
 ## explicit; go 1.22.2
 github.com/BariVakhidov/ssoprotos/gen/go/sso
 # github.com/BurntSushi/toml v1.4.0
@@ -41,6 +41,9 @@ github.com/golang-migrate/migrate/v4/internal/url
 github.com/golang-migrate/migrate/v4/source
 github.com/golang-migrate/migrate/v4/source/file
 github.com/golang-migrate/migrate/v4/source/iofs
+# github.com/google/uuid v1.6.0
+## explicit
+github.com/google/uuid
 # github.com/hashicorp/errwrap v1.1.0
 ## explicit
 github.com/hashicorp/errwrap

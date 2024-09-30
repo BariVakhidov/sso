@@ -1,6 +1,8 @@
 package tests
 
 import (
+	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -17,18 +19,28 @@ import (
 )
 
 const (
-	emptyAppId     = 0
-	appID          = 1
+	emptyAppId     = ""
 	appSecret      = "test_secret"
 	appName        = "test"
 	passDefaultLen = 10
 )
 
+func TestCreateApp_HappyPath(t *testing.T) {
+	ctx, suite := suite.New(t)
+
+	createAppResp, err := suite.AuthClient.CreateApp(ctx, &ssov1.CreateAppRequest{
+		Name:   fmt.Sprintf("test_%s", gofakeit.LetterN(10)),
+		Secret: gofakeit.LetterN(10),
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, createAppResp.GetAppId())
+}
+
 func TestRegister_HappyPath(t *testing.T) {
 	ctx, suite := suite.New(t)
 
 	var (
-		email    = gofakeit.Email()
+		email    = fmt.Sprintf("test_%s", gofakeit.Email())
 		password = generatePassword()
 	)
 
@@ -44,7 +56,7 @@ func TestRegister_Duplicate(t *testing.T) {
 	ctx, suite := suite.New(t)
 
 	var (
-		email    = gofakeit.Email()
+		email    = fmt.Sprintf("test_%s", gofakeit.Email())
 		password = generatePassword()
 	)
 
@@ -123,9 +135,10 @@ func TestRegister_UnHappyPath(t *testing.T) {
 
 func TestRegisterLogin_Login_HappyPath(t *testing.T) {
 	ctx, suite := suite.New(t)
+	appID := createApp(t, suite, ctx)
 
 	var (
-		email    = gofakeit.Email()
+		email    = fmt.Sprintf("test_%s", gofakeit.Email())
 		password = generatePassword()
 	)
 
@@ -155,9 +168,9 @@ func TestRegisterLogin_Login_HappyPath(t *testing.T) {
 	claims, ok := tokenParsed.Claims.(jwt.MapClaims)
 	assert.True(t, ok)
 
-	assert.Equal(t, registerResp.GetUserId(), int64(claims["uid"].(float64)))
+	assert.Equal(t, registerResp.GetUserId(), claims["uid"].(string))
 	assert.Equal(t, email, claims["email"].(string))
-	assert.Equal(t, appID, int(claims["app_id"].(float64)))
+	assert.Equal(t, appID, claims["app_id"].(string))
 
 	const deltaSeconds = 1
 	assert.InDelta(t, loginTime.Add(suite.Cfg.TokenTTL).Unix(), claims["exp"].(float64), deltaSeconds)
@@ -165,8 +178,10 @@ func TestRegisterLogin_Login_HappyPath(t *testing.T) {
 
 func TestRegisterLogin_Login_UnHappyPath(t *testing.T) {
 	ctx, suite := suite.New(t)
+	appID := createApp(t, suite, ctx)
+
 	var (
-		email    = gofakeit.Email()
+		email    = fmt.Sprintf("test_%s", gofakeit.Email())
 		password = generatePassword()
 	)
 
@@ -174,7 +189,7 @@ func TestRegisterLogin_Login_UnHappyPath(t *testing.T) {
 		name         string
 		email        string
 		password     string
-		appID        int32
+		appID        string
 		expectedCode codes.Code
 		expectedMsg  string
 	}{
@@ -238,9 +253,9 @@ func TestRegisterLogin_Login_UnHappyPath(t *testing.T) {
 			name:         "Login with wrong appID",
 			email:        email,
 			password:     password,
-			expectedCode: codes.Internal,
-			expectedMsg:  auth.ErrInternal,
-			appID:        gofakeit.Int32(),
+			expectedCode: codes.InvalidArgument,
+			expectedMsg:  auth.ErrInvalidCredentials,
+			appID:        gofakeit.LetterN(15),
 		},
 		{
 			name:         "Login with empty appID",
@@ -248,7 +263,7 @@ func TestRegisterLogin_Login_UnHappyPath(t *testing.T) {
 			password:     generatePassword(),
 			expectedCode: codes.InvalidArgument,
 			expectedMsg:  auth.ErrAppIDRequired,
-			appID:        emptyAppId,
+			appID:        "",
 		},
 	}
 
@@ -289,4 +304,26 @@ func assertErrCode(t *testing.T, err error, targetCode codes.Code, msg string) {
 	assert.True(t, ok)
 	assert.Equal(t, targetCode, code.Code())
 	assert.Equal(t, msg, code.Message())
+}
+
+func createApp(t *testing.T, suite *suite.Suite, ctx context.Context) string {
+	t.Helper()
+
+	app, err := suite.AuthClient.App(ctx, &ssov1.AppRequest{Name: appName})
+	if err != nil {
+		code, ok := status.FromError(err)
+		assert.True(t, ok)
+		if code.Code() == codes.NotFound {
+			createAppResp, err := suite.AuthClient.CreateApp(ctx, &ssov1.CreateAppRequest{
+				Name:   appName,
+				Secret: appSecret,
+			})
+			require.NoError(t, err)
+			assert.NotNil(t, createAppResp.GetAppId())
+			return createAppResp.GetAppId()
+		}
+		t.Error(err)
+	}
+
+	return app.GetAppId()
 }

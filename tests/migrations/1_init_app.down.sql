@@ -1,4 +1,9 @@
 DELETE FROM
     apps
 WHERE
-    name = "test";
+    name LIKE "test%";
+
+DELETE FROM
+    users
+WHERE
+    email LIKE "test%";

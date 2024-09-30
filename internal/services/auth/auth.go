@@ -12,12 +12,15 @@ import (
 	"github.com/BariVakhidov/sso/internal/domain/models"
 	"github.com/BariVakhidov/sso/internal/lib/jwt"
 	"github.com/BariVakhidov/sso/internal/storage"
+	"github.com/google/uuid"
 )
 
 var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrInvalidUserID      = errors.New("invalid userID")
 	ErrUserExists         = errors.New("user exists")
+	ErrAppExists          = errors.New("app exists")
+	ErrAppNotFound        = errors.New("app not found")
 	ErrUserNotFound       = errors.New("user not found")
 )
 
@@ -30,16 +33,18 @@ type Auth struct {
 }
 
 type UserSaver interface {
-	SaveUser(ctx context.Context, email string, passwordHash []byte) (uid int64, err error)
+	SaveUser(ctx context.Context, email string, passwordHash []byte) (user models.User, err error)
 }
 
 type UserProvider interface {
 	User(ctx context.Context, email string) (models.User, error)
-	IsAdmin(ctx context.Context, userID int64) (bool, error)
+	IsAdmin(ctx context.Context, userID uuid.UUID) (bool, error)
 }
 
 type AppProvider interface {
-	App(ctx context.Context, appID int32) (models.App, error)
+	App(ctx context.Context, appID uuid.UUID) (models.App, error)
+	FindApp(ctx context.Context, name string) (models.App, error)
+	CreateApp(ctx context.Context, name, secret string) (models.App, error)
 }
 
 // New returns a new instance of the Auth service
@@ -59,7 +64,7 @@ func New(
 	}
 }
 
-func (a *Auth) Login(ctx context.Context, email string, password string, appID int32) (string, error) {
+func (a *Auth) Login(ctx context.Context, email string, password string, appID uuid.UUID) (string, error) {
 	const op = "auth.Login"
 	log := a.log.With("op", op)
 	log.Info("login user")
@@ -94,7 +99,7 @@ func (a *Auth) Login(ctx context.Context, email string, password string, appID i
 	return token, nil
 }
 
-func (a *Auth) RegisterNewUser(ctx context.Context, email string, password string) (int64, error) {
+func (a *Auth) RegisterNewUser(ctx context.Context, email string, password string) (uuid.UUID, error) {
 	const op = "auth.RegisterNewUser"
 	log := a.log.With("op", op)
 	log.Info("registering new user")
@@ -102,26 +107,26 @@ func (a *Auth) RegisterNewUser(ctx context.Context, email string, password strin
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		log.Error("failed to generate passwordHash", "err", err)
-		return 0, fmt.Errorf("%s: %w", op, err)
+		return uuid.Nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	userID, err := a.userSaver.SaveUser(ctx, email, passwordHash)
+	user, err := a.userSaver.SaveUser(ctx, email, passwordHash)
 	if err != nil {
 		if errors.Is(err, storage.ErrUserExists) {
 			log.Error("user exists", "err", err)
-			return 0, fmt.Errorf("%s: %w", op, ErrUserExists)
+			return uuid.Nil, fmt.Errorf("%s: %w", op, ErrUserExists)
 		}
 
 		log.Error("failed to save user", "err", err)
-		return 0, fmt.Errorf("%s: %w", op, err)
+		return uuid.Nil, fmt.Errorf("%s: %w", op, err)
 	}
 
 	log.Info("user registered")
 
-	return userID, nil
+	return user.ID, nil
 }
 
-func (a *Auth) IsAdmin(ctx context.Context, userID int64) (bool, error) {
+func (a *Auth) IsAdmin(ctx context.Context, userID uuid.UUID) (bool, error) {
 	const op = "auth.IsAdmin"
 	log := a.log.With("op", op)
 	log.Info("checking if user is admin")
@@ -140,4 +145,44 @@ func (a *Auth) IsAdmin(ctx context.Context, userID int64) (bool, error) {
 	log.Info("checked if user is admin", slog.Bool("is_admin", isAdmin))
 
 	return isAdmin, nil
+}
+
+func (a *Auth) CreateApp(ctx context.Context, name, secret string) (uuid.UUID, error) {
+	const op = "auth.CreateApp"
+	log := a.log.With("op", op)
+	log.Info("creating new app")
+
+	app, err := a.appProvider.CreateApp(ctx, name, secret)
+	if err != nil {
+		if errors.Is(err, storage.ErrAppExists) {
+			log.Error("app exists", "err", err)
+			return uuid.Nil, fmt.Errorf("%s: %w", op, ErrAppExists)
+		}
+
+		log.Error("failed to create app", "err", err)
+		return uuid.Nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	log.Info("created new app", slog.String("appName", app.Name))
+
+	return app.ID, nil
+}
+
+func (a *Auth) App(ctx context.Context, name string) (models.App, error) {
+	const op = "auth.App"
+	log := a.log.With("op", op)
+	log.Info("getting app")
+
+	app, err := a.appProvider.FindApp(ctx, name)
+	if err != nil {
+		if errors.Is(err, storage.ErrAppNotFound) {
+			log.Error("app not found", "err", err)
+			return models.App{}, fmt.Errorf("%s: %w", op, ErrAppNotFound)
+		}
+
+		log.Error("failed to get app", "err", err)
+		return models.App{}, fmt.Errorf("%s: %w", op, err)
+	}
+
+	return app, nil
 }
