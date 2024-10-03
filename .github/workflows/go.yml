@@ -64,7 +64,7 @@ jobs:
 
       - name: Run migrator
         run: |
-          ./migrator --db=postgres --migrations-path=./migrations/postgres/ --storage_path=localhost:5432
+          ./migrator --db=postgres --migrations-path=./migrations/postgres/ --storage-path=localhost:5432
 
       - name: Run
         run: |
