@@ -1,6 +1,7 @@
 package grpcapp
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net"
@@ -8,6 +9,8 @@ import (
 
 	"github.com/BariVakhidov/sso/internal/grpc/auth"
 	authgrpc "github.com/BariVakhidov/sso/internal/grpc/auth"
+	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
+	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
 	"google.golang.org/grpc"
 )
 
@@ -18,13 +21,28 @@ type AppOpts struct {
 	TTL         time.Duration
 }
 
+type Metrics interface {
+	Initialize(srv *grpc.Server)
+}
+
 type App struct {
 	AppOpts
 	gRPCServer *grpc.Server
 }
 
-func New(opts AppOpts, auth auth.Auth) *App {
-	gRPCServer := grpc.NewServer()
+func New(opts AppOpts, auth auth.Auth, metrics Metrics, recoveryOpt recovery.Option, metricsInterceptor grpc.UnaryServerInterceptor) *App {
+	logOpts := []logging.Option{
+		logging.WithLogOnEvents(logging.PayloadSent, logging.PayloadReceived),
+	}
+
+	gRPCServer := grpc.NewServer(grpc.ChainUnaryInterceptor(
+		metricsInterceptor,
+		logging.UnaryServerInterceptor(InterceptorLogger(opts.Log), logOpts...),
+		recovery.UnaryServerInterceptor(recoveryOpt),
+	))
+
+	metrics.Initialize(gRPCServer)
+
 	authgrpc.Register(gRPCServer, auth)
 
 	return &App{gRPCServer: gRPCServer, AppOpts: opts}
@@ -62,4 +80,12 @@ func (a *App) Stop() {
 		Info("stopping gRPC server", slog.Int("port", a.Port))
 
 	a.gRPCServer.GracefulStop()
+}
+
+// InterceptorLogger adapts slog logger to interceptor logger.
+// This code is simple enough to be copied and not imported.
+func InterceptorLogger(l *slog.Logger) logging.Logger {
+	return logging.LoggerFunc(func(ctx context.Context, lvl logging.Level, msg string, fields ...any) {
+		l.Log(ctx, slog.Level(lvl), msg, fields...)
+	})
 }

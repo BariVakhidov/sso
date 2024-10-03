@@ -1,0 +1,35 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ["alertname"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 3h
+  receiver: "telegram-notifications" # Default receiver (if none of the matchers below are triggered)
+
+  routes:
+    - matchers:
+        - severity = "critical"
+      receiver: "telegram-notifications"
+      continue: true # Ensure the alert continues to the next route
+
+    - matchers:
+        - severity = "critical"
+      receiver: "discord-notifications"
+
+receivers:
+  - name: "telegram-notifications"
+    telegram_configs:
+      - send_resolved: true
+        bot_token: "7979798510:AAHlwv4H4xDCma_zKp0aq74bc5ogMHnbgXc"
+        chat_id: -1002266367419
+        message: |
+          "Alert: {{ .CommonLabels.alertname }}"
+          "Description: {{ .CommonAnnotations.description }}"
+          "Severity: {{ .CommonLabels.severity }}"
+          "Details: {{ .CommonLabels }}"
+  - name: "discord-notifications"
+    discord_configs:
+      - webhook_url: "https://discord.com/api/webhooks/1291361958976684055/awGaJ3s95EjVruiUFD_UZrPqfv16hQqpQe66opPQ87xQ0eoi5fUfJGZcZQdstARsHG-S"
+        send_resolved: true

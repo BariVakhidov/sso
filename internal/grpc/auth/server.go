@@ -19,19 +19,20 @@ const (
 )
 
 const (
-	ErrInvalidEmail       = "invalid email format"
-	ErrPasswordRequired   = "password is required"
-	ErrEmailRequired      = "email is required"
-	ErrUserIDRequired     = "userID is required"
-	ErrUserNotFound       = "user not found"
-	ErrUserExists         = "user already exists"
-	ErrAppExists          = "app already exists"
-	ErrAppNotFound        = "app not found"
-	ErrAppNameRequired    = "app name required"
-	ErrAppSecretRequired  = "app secret required"
-	ErrAppIDRequired      = "app_id is required"
-	ErrInternal           = "internal error"
-	ErrInvalidCredentials = "invalid credentials"
+	ErrInvalidEmail           = "invalid email format"
+	ErrPasswordRequired       = "password is required"
+	ErrEmailRequired          = "email is required"
+	ErrUserIDRequired         = "userID is required"
+	ErrUserNotFound           = "user not found"
+	ErrUserExists             = "user already exists"
+	ErrAppExists              = "app already exists"
+	ErrAppNotFound            = "app not found"
+	ErrAppNameRequired        = "app name required"
+	ErrAppSecretRequired      = "app secret required"
+	ErrAppIDRequired          = "app_id is required"
+	ErrInternal               = "internal error"
+	ErrInvalidCredentials     = "invalid credentials"
+	ErrAccountTemporaryLocked = "account is temporary locked"
 )
 
 type Auth interface {
@@ -83,6 +84,10 @@ func (s *serverAPI) Login(ctx context.Context, req *ssov1.LoginRequest) (*ssov1.
 	if err != nil {
 		if errors.Is(err, auth.ErrInvalidCredentials) {
 			return nil, status.Error(codes.InvalidArgument, ErrInvalidCredentials)
+		}
+
+		if errors.Is(err, auth.ErrAccountIsLocked) {
+			return nil, status.Error(codes.InvalidArgument, ErrAccountTemporaryLocked)
 		}
 
 		return nil, status.Error(codes.Internal, ErrInternal)

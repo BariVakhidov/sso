@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 5s
+
+rule_files:
+  - "alert.rules.yml"
+
+scrape_configs:
+  - job_name: "sso-server"
+    static_configs:
+      - targets: ["sso:9090"]
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]

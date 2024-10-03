@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/BariVakhidov/sso/internal/grpc/auth"
+	authService "github.com/BariVakhidov/sso/internal/services/auth"
 	"github.com/BariVakhidov/sso/tests/suite"
 	ssov1 "github.com/BariVakhidov/ssoprotos/gen/go/sso"
 	"github.com/brianvoe/gofakeit/v7"
@@ -34,6 +35,22 @@ func TestCreateApp_HappyPath(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.NotNil(t, createAppResp.GetAppId())
+}
+
+func TestFindApp_HappyPath(t *testing.T) {
+	ctx, suite := suite.New(t)
+	name := fmt.Sprintf("test_%s", gofakeit.LetterN(10))
+
+	createAppResp, err := suite.AuthClient.CreateApp(ctx, &ssov1.CreateAppRequest{
+		Name:   name,
+		Secret: gofakeit.LetterN(10),
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, createAppResp.GetAppId())
+
+	findAppResp, err := suite.AuthClient.App(ctx, &ssov1.AppRequest{Name: name})
+	require.NoError(t, err)
+	assert.Equal(t, findAppResp.GetAppId(), createAppResp.GetAppId())
 }
 
 func TestRegister_HappyPath(t *testing.T) {
@@ -133,6 +150,42 @@ func TestRegister_UnHappyPath(t *testing.T) {
 	wg.Wait()
 }
 
+func TestBruteforceLogin(t *testing.T) {
+	ctx, suite := suite.New(t)
+	appID := createApp(t, suite, ctx)
+
+	var (
+		email    = fmt.Sprintf("test_%s", gofakeit.Email())
+		password = generatePassword()
+	)
+
+	registerResp, err := suite.AuthClient.Register(ctx, &ssov1.RegisterRequest{
+		Email:    email,
+		Password: password,
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, registerResp.GetUserId())
+
+	for i := 0; i < authService.MaxFailedLoginAttempts; i++ {
+		_, err := suite.AuthClient.Login(ctx, &ssov1.LoginRequest{
+			Email:    email,
+			Password: generatePassword(),
+			AppId:    appID,
+		})
+		assertErrCode(t, err, codes.InvalidArgument, auth.ErrInvalidCredentials)
+	}
+
+	_, err = suite.AuthClient.Login(ctx, &ssov1.LoginRequest{
+		Email:    email,
+		Password: generatePassword(),
+		AppId:    appID,
+	})
+	assertErrCode(t, err, codes.InvalidArgument, auth.ErrAccountTemporaryLocked)
+
+	time.Sleep(authService.BaseLockoutDuration)
+	assertLogin(t, ctx, email, password, appID, registerResp.GetUserId(), suite)
+}
+
 func TestRegisterLogin_Login_HappyPath(t *testing.T) {
 	ctx, suite := suite.New(t)
 	appID := createApp(t, suite, ctx)
@@ -149,31 +202,7 @@ func TestRegisterLogin_Login_HappyPath(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, registerResp.GetUserId())
 
-	loginResp, err := suite.AuthClient.Login(ctx, &ssov1.LoginRequest{
-		Email:    email,
-		Password: password,
-		AppId:    appID,
-	})
-	require.NoError(t, err)
-	loginTime := time.Now()
-
-	token := loginResp.GetToken()
-	assert.NotNil(t, token)
-
-	tokenParsed, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
-		return []byte(appSecret), nil
-	})
-	require.NoError(t, err)
-
-	claims, ok := tokenParsed.Claims.(jwt.MapClaims)
-	assert.True(t, ok)
-
-	assert.Equal(t, registerResp.GetUserId(), claims["uid"].(string))
-	assert.Equal(t, email, claims["email"].(string))
-	assert.Equal(t, appID, claims["app_id"].(string))
-
-	const deltaSeconds = 1
-	assert.InDelta(t, loginTime.Add(suite.Cfg.TokenTTL).Unix(), claims["exp"].(float64), deltaSeconds)
+	assertLogin(t, ctx, email, password, appID, registerResp.GetUserId(), suite)
 }
 
 func TestRegisterLogin_Login_UnHappyPath(t *testing.T) {
@@ -326,4 +355,33 @@ func createApp(t *testing.T, suite *suite.Suite, ctx context.Context) string {
 	}
 
 	return app.GetAppId()
+}
+
+func assertLogin(t *testing.T, ctx context.Context, email, password, appID, userID string, suite *suite.Suite) {
+	t.Helper()
+	loginResp, err := suite.AuthClient.Login(ctx, &ssov1.LoginRequest{
+		Email:    email,
+		Password: password,
+		AppId:    appID,
+	})
+	require.NoError(t, err)
+	loginTime := time.Now()
+
+	token := loginResp.GetToken()
+	assert.NotNil(t, token)
+
+	tokenParsed, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
+		return []byte(appSecret), nil
+	})
+	require.NoError(t, err)
+
+	claims, ok := tokenParsed.Claims.(jwt.MapClaims)
+	assert.True(t, ok)
+
+	assert.Equal(t, userID, claims["uid"].(string))
+	assert.Equal(t, email, claims["email"].(string))
+	assert.Equal(t, appID, claims["app_id"].(string))
+
+	const deltaSeconds = 1
+	assert.InDelta(t, loginTime.Add(suite.Cfg.TokenTTL).Unix(), claims["exp"].(float64), deltaSeconds)
 }

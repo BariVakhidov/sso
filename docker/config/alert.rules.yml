@@ -1,0 +1,21 @@
+groups:
+  - name: grpc-alerts
+    rules:
+      - alert: PanicAlert😳
+        expr: increase(grpc_req_panics_recovered_total[1m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Panic detected in SSO gRPC server"
+          description: "A panic was recovered in the SSO gRPC server."
+  - name: login_alerts
+    rules:
+      - alert: PossibleBruteForceAttack😳
+        expr: sum(rate(failed_login_attempts_total[1m])) by (ip) > 10
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High failed login attempts from IP: {{ $labels.ip }}"
+          description: "The IP {{ $labels.ip }} has made {{ $value }} failed login attempts in the last 1 minute."

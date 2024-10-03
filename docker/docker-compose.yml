@@ -1,0 +1,88 @@
+services:
+  redis:
+    image: redis:latest
+    restart: always
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 1s
+      timeout: 3s
+      retries: 5
+    command: ["redis-server"]
+    networks:
+      - sso-net
+
+  db:
+    image: postgres
+    container_name: local_sso
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: sso
+    volumes:
+      - local_sso:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s        # Time between running the check (e.g., every 10 seconds)
+      timeout: 5s          # Time to wait for the health check to succeed
+      retries: 5           # Number of consecutive failures needed to mark the container as unhealthy
+      start_period: 30s
+    networks:
+      - sso-net
+  sso:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: sso_server
+    ports:
+      - 8080:44044
+      - 8081:9090
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
+    labels:
+      co.elastic.logs/enabled: true
+      co.elastic.logs/json.keys_under_root: true
+      co.elastic.logs/json.overwrite_keys: true
+      co.elastic.logs/json.add_error_key: true
+      co.elastic.logs/json.expand_keys: true
+    networks:
+      - sso-net
+  migrator:
+    build:
+      context: ..
+      dockerfile: migrator.Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - sso-net
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin_sso
+    restart: always
+    ports:
+      - "8888:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: user-name@domain-name.com
+      PGADMIN_DEFAULT_PASSWORD: strong-password
+    volumes:
+      - pgadmin-sso:/var/lib/pgadmin
+    networks:
+      - sso-net
+
+volumes:
+  local_sso:
+  pgadmin-sso:
+
+networks:
+  sso-net:
+    driver: bridge
