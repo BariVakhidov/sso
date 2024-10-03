@@ -18,8 +18,6 @@ type Storage struct {
 }
 
 func New(addr string, ttl time.Duration) *Storage {
-	const op = "storage.redis.New"
-
 	client := redis.NewClient(&redis.Options{
 		Addr:     addr,
 		Password: "", // no password set

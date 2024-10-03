@@ -241,7 +241,6 @@ func (a *Auth) App(ctx context.Context, name string) (models.App, error) {
 }
 
 func (a *Auth) handleFailedLogin(userID uuid.UUID, failedLoginAttempt models.FailedLogin, isFirstAttempt bool) models.FailedLogin {
-	const op = "auth.handleFailedLogin"
 	now := time.Now()
 
 	if isFirstAttempt {
