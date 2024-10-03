@@ -21,8 +21,6 @@ import (
 
 const (
 	emptyAppId     = ""
-	appSecret      = "test_secret"
-	appName        = "test"
 	passDefaultLen = 10
 )
 
@@ -152,7 +150,7 @@ func TestRegister_UnHappyPath(t *testing.T) {
 
 func TestBruteforceLogin(t *testing.T) {
 	ctx, suite := suite.New(t)
-	appID := createApp(t, suite, ctx)
+	appID, secret := createApp(t, suite, ctx)
 
 	var (
 		email    = fmt.Sprintf("test_%s", gofakeit.Email())
@@ -183,12 +181,12 @@ func TestBruteforceLogin(t *testing.T) {
 	assertErrCode(t, err, codes.InvalidArgument, auth.ErrAccountTemporaryLocked)
 
 	time.Sleep(authService.BaseLockoutDuration)
-	assertLogin(t, ctx, email, password, appID, registerResp.GetUserId(), suite)
+	assertLogin(t, ctx, email, password, appID, registerResp.GetUserId(), secret, suite)
 }
 
 func TestRegisterLogin_Login_HappyPath(t *testing.T) {
 	ctx, suite := suite.New(t)
-	appID := createApp(t, suite, ctx)
+	appID, secret := createApp(t, suite, ctx)
 
 	var (
 		email    = fmt.Sprintf("test_%s", gofakeit.Email())
@@ -202,12 +200,12 @@ func TestRegisterLogin_Login_HappyPath(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotNil(t, registerResp.GetUserId())
 
-	assertLogin(t, ctx, email, password, appID, registerResp.GetUserId(), suite)
+	assertLogin(t, ctx, email, password, appID, registerResp.GetUserId(), secret, suite)
 }
 
 func TestRegisterLogin_Login_UnHappyPath(t *testing.T) {
 	ctx, suite := suite.New(t)
-	appID := createApp(t, suite, ctx)
+	appID, _ := createApp(t, suite, ctx)
 
 	var (
 		email    = fmt.Sprintf("test_%s", gofakeit.Email())
@@ -335,29 +333,19 @@ func assertErrCode(t *testing.T, err error, targetCode codes.Code, msg string) {
 	assert.Equal(t, msg, code.Message())
 }
 
-func createApp(t *testing.T, suite *suite.Suite, ctx context.Context) string {
+func createApp(t *testing.T, suite *suite.Suite, ctx context.Context) (appId string, secret string) {
 	t.Helper()
-
-	app, err := suite.AuthClient.App(ctx, &ssov1.AppRequest{Name: appName})
-	if err != nil {
-		code, ok := status.FromError(err)
-		assert.True(t, ok)
-		if code.Code() == codes.NotFound {
-			createAppResp, err := suite.AuthClient.CreateApp(ctx, &ssov1.CreateAppRequest{
-				Name:   appName,
-				Secret: appSecret,
-			})
-			require.NoError(t, err)
-			assert.NotNil(t, createAppResp.GetAppId())
-			return createAppResp.GetAppId()
-		}
-		t.Error(err)
-	}
-
-	return app.GetAppId()
+	secret = gofakeit.LetterN(10)
+	createAppResp, err := suite.AuthClient.CreateApp(ctx, &ssov1.CreateAppRequest{
+		Name:   fmt.Sprintf("test_%s", gofakeit.LetterN(10)),
+		Secret: secret,
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, createAppResp.GetAppId())
+	return createAppResp.GetAppId(), secret
 }
 
-func assertLogin(t *testing.T, ctx context.Context, email, password, appID, userID string, suite *suite.Suite) {
+func assertLogin(t *testing.T, ctx context.Context, email, password, appID, userID, appSecret string, suite *suite.Suite) {
 	t.Helper()
 	loginResp, err := suite.AuthClient.Login(ctx, &ssov1.LoginRequest{
 		Email:    email,
