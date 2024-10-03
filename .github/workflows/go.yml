@@ -64,7 +64,7 @@ jobs:
 
       - name: Run migrator
         run: |
-          ./migrator --db=postgres --migrations-path=../migrations/postgres/
+          ./migrator --db=postgres --migrations-path=./migrations/postgres/
 
       - name: Run
         run: |
