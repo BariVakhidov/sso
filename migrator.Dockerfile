@@ -21,4 +21,4 @@ COPY --from=build-stage /migrator /migrator
 COPY --from=build-stage /app/config /config
 COPY --from=build-stage /app/migrations /migrations
 
-ENTRYPOINT [ "/migrator","--db","postgres", "--migrations-path","../migrations/postgres/" ]
+ENTRYPOINT [ "/migrator","--db","postgres", "--migrations-path","../migrations/postgres/", "--storage-path","db:5432" ]

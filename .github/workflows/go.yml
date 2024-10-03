@@ -64,11 +64,11 @@ jobs:
 
       - name: Run migrator
         run: |
-          ./migrator --db=postgres --migrations-path=./migrations/postgres/
+          ./migrator --db=postgres --migrations-path=./migrations/postgres/ --storage_path=localhost:5432
 
       - name: Run
         run: |
-          nohup ./sso --config=./config/local.yml &
+          nohup ./sso --config=./config/local_tests.yml &
           sleep 5 # wait for the server to start
 
       - name: Test

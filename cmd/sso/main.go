@@ -24,7 +24,7 @@ func main() {
 	logger := setupLogger(cfg.Env)
 	logger.Info("starting application", slog.String("env", cfg.Env))
 
-	application := app.New(logger, cfg.GRPC.Port, cfg.StoragePath, cfg.TokenTTL)
+	application := app.New(logger, cfg.GRPC.Port, cfg.StoragePath, cfg.TokenTTL, cfg.Addr)
 
 	go application.MustRun()
 

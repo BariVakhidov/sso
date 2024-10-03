@@ -13,6 +13,12 @@ type Config struct {
 	StoragePath string        `yaml:"storage_path" env-required:"true"`
 	TokenTTL    time.Duration `yaml:"token_ttl" env-required:"true"`
 	GRPC        GRPCConfig    `yaml:"grpc"`
+	Addr        Addr          `yaml:"addr"`
+}
+
+type Addr struct {
+	Db    string `yaml:"db"`
+	Redis string `yaml:"redis"`
 }
 
 type GRPCConfig struct {

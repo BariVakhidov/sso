@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -8,6 +9,7 @@ import (
 	prometheusapp "github.com/BariVakhidov/sso/internal/app/prometheus"
 	storageapp "github.com/BariVakhidov/sso/internal/app/storage"
 	redisapp "github.com/BariVakhidov/sso/internal/app/storage/redis"
+	"github.com/BariVakhidov/sso/internal/config"
 	"github.com/BariVakhidov/sso/internal/services/auth"
 )
 
@@ -18,12 +20,12 @@ type App struct {
 	redisStorage *redisapp.App
 }
 
-func New(log *slog.Logger, grpcPort int, storagePath string, ttl time.Duration) *App {
+func New(log *slog.Logger, grpcPort int, storagePath string, ttl time.Duration, addr config.Addr) *App {
 	metrics := prometheusapp.New(log, 9090)
 	//TODO: configs
-	storage := storageapp.MustCreateApp("postgres://postgres:password@db:5432/sso", log)
+	storage := storageapp.MustCreateApp(fmt.Sprintf("postgres://postgres:password@%s/sso", addr.Db), log)
 
-	redisApp := redisapp.New(log, "redis:6379", time.Minute*10)
+	redisApp := redisapp.New(log, addr.Redis, time.Minute*10)
 
 	auth := auth.New(
 		log,

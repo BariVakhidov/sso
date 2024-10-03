@@ -1,6 +1,9 @@
 env: "local"
 storage_path: "./storage/sso.db"
 token_ttl: 1h
+addr:
+  db: "localhost:5432"
+  redis: "localhost:6379"
 grpc:
   port: 8080
   timeout: 10h

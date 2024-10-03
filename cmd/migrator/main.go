@@ -83,7 +83,7 @@ func dbUrl(db, storagePath, migrationsTable string) string {
 	case "sqlite3":
 		return fmt.Sprintf("sqlite3://%s?x-migrations-table=%s", storagePath, migrationsTable)
 	case "postgres":
-		return "postgres://postgres:password@db:5432/sso?sslmode=disable"
+		return fmt.Sprintf("postgres://postgres:password@%s/sso?sslmode=disable", storagePath)
 	}
 
 	return ""

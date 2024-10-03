@@ -1,6 +1,9 @@
 env: "production"
 storage_path: "./storage/sso.db"
 token_ttl: 1h
+addr:
+  db: "db:5432"
+  redis: "redis:6379"
 grpc:
   port: 44044
   timeout: 10h
