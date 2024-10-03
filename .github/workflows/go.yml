@@ -64,7 +64,7 @@ jobs:
 
       - name: Run migrator
         run: |
-          ./migrator --storage-path=./storage/sso.db --migrations-path=./migrations/
+          ./migrator --db=postgres --migrations-path=../migrations/postgres/
 
       - name: Run
         run: |
