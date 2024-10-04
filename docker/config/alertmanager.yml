@@ -18,6 +18,7 @@ route:
         - severity = "critical"
       receiver: "discord-notifications"
 
+# TODO: secrets
 receivers:
   - name: "telegram-notifications"
     telegram_configs:

@@ -9,9 +9,11 @@ import (
 
 	"github.com/BariVakhidov/sso/internal/grpc/auth"
 	authgrpc "github.com/BariVakhidov/sso/internal/grpc/auth"
+	ssov1 "github.com/BariVakhidov/ssoprotos/gen/go/sso"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
 type AppOpts struct {
@@ -30,7 +32,7 @@ type App struct {
 	gRPCServer *grpc.Server
 }
 
-func New(opts AppOpts, auth auth.Auth, metrics Metrics, recoveryOpt recovery.Option, metricsInterceptor grpc.UnaryServerInterceptor) *App {
+func New(opts AppOpts, auth auth.AuthService, metrics Metrics, recoveryOpt recovery.Option, metricsInterceptor grpc.UnaryServerInterceptor) *App {
 	logOpts := []logging.Option{
 		logging.WithLogOnEvents(logging.PayloadSent, logging.PayloadReceived),
 	}
@@ -42,8 +44,10 @@ func New(opts AppOpts, auth auth.Auth, metrics Metrics, recoveryOpt recovery.Opt
 	))
 
 	metrics.Initialize(gRPCServer)
+	reflection.Register(gRPCServer)
+	server := authgrpc.InitializeServerAPI(auth)
 
-	authgrpc.Register(gRPCServer, auth)
+	ssov1.RegisterAuthServer(gRPCServer, server)
 
 	return &App{gRPCServer: gRPCServer, AppOpts: opts}
 }

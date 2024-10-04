@@ -42,12 +42,12 @@ func New(dbAddr string) (*Storage, error) {
 	return &Storage{dbpool: dbpool}, nil
 }
 
-func (s *Storage) SaveUser(ctx context.Context, email string, passHash []byte) (models.User, error) {
+func (s *Storage) SaveUser(ctx context.Context, userID, email string, passHash []byte) (models.User, error) {
 	const op = "storage.postgres.SaveUser"
 
 	query := "INSERT INTO users(id,email,pass_hash) VALUES(@userId,@userEmail,@userPassHash) RETURNING id,email,pass_hash"
 	args := pgx.NamedArgs{
-		"userId":       uuid.New(),
+		"userId":       userID,
 		"userEmail":    email,
 		"userPassHash": passHash,
 	}
@@ -143,12 +143,12 @@ func (s *Storage) FindApp(ctx context.Context, name string) (models.App, error) 
 	return app, nil
 }
 
-func (s *Storage) CreateApp(ctx context.Context, name string, secret string) (models.App, error) {
+func (s *Storage) CreateApp(ctx context.Context, appID, name string, secret string) (models.App, error) {
 	const op = "storage.postgres.CreateApp"
 
 	query := "INSERT INTO apps(id,name,secret) VALUES(@appId,@appName,@appSecret) RETURNING id,name,secret"
 	args := pgx.NamedArgs{
-		"appId":     uuid.New(),
+		"appId":     appID,
 		"appName":   name,
 		"appSecret": secret,
 	}

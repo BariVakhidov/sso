@@ -19,15 +19,6 @@ import (
 	"google.golang.org/grpc/peer"
 )
 
-var (
-	ErrInvalidCredentials = errors.New("invalid credentials")
-	ErrInvalidUserID      = errors.New("invalid userID")
-	ErrUserExists         = errors.New("user exists")
-	ErrAppExists          = errors.New("app exists")
-	ErrAppNotFound        = errors.New("app not found")
-	ErrUserNotFound       = errors.New("user not found")
-	ErrAccountIsLocked    = errors.New("account is locked")
-)
 
 type Auth struct {
 	log                  *slog.Logger
@@ -40,13 +31,13 @@ type Auth struct {
 }
 
 type FailedLoginProvider interface {
-	FailedLoginAttempts(ctx context.Context, userID uuid.UUID) (models.FailedLogin, error)
-	SaveFailedLoginAttempts(ctx context.Context, userID uuid.UUID, failedLogin models.FailedLogin) error
-	RemoveFailedLoginAttempts(ctx context.Context, userID uuid.UUID) error
+	FailedLoginAttempts(ctx context.Context, userID string) (models.FailedLogin, error)
+	SaveFailedLoginAttempts(ctx context.Context, userID string, failedLogin models.FailedLogin) error
+	RemoveFailedLoginAttempts(ctx context.Context, userID string) error
 }
 
 type UserSaver interface {
-	SaveUser(ctx context.Context, email string, passwordHash []byte) (user models.User, err error)
+	SaveUser(ctx context.Context, userID string, email string, passwordHash []byte) (user models.User, err error)
 }
 
 type UserProvider interface {
@@ -57,7 +48,7 @@ type UserProvider interface {
 type AppProvider interface {
 	App(ctx context.Context, appID uuid.UUID) (models.App, error)
 	FindApp(ctx context.Context, name string) (models.App, error)
-	CreateApp(ctx context.Context, name, secret string) (models.App, error)
+	CreateApp(ctx context.Context, appID, name, secret string) (models.App, error)
 }
 
 const (
@@ -107,7 +98,7 @@ func (a *Auth) Login(ctx context.Context, email string, password string, appID u
 	}
 
 	// Check if user is currently locked out
-	failedLoginAttempt, err := a.failedLoginsProvider.FailedLoginAttempts(ctx, user.ID)
+	failedLoginAttempt, err := a.failedLoginsProvider.FailedLoginAttempts(ctx, user.ID.String())
 	isFirstAttempt := errors.Is(err, storage.ErrFailedLoginNotFound)
 	if err != nil && !isFirstAttempt {
 		return "", fmt.Errorf("%s: %w", op, err)
@@ -124,14 +115,14 @@ func (a *Auth) Login(ctx context.Context, email string, password string, appID u
 		a.failedLogins.WithLabelValues(email, p.Addr.String()).Inc()
 
 		newAttempt := a.handleFailedLogin(user.ID, failedLoginAttempt, isFirstAttempt)
-		if err := a.failedLoginsProvider.SaveFailedLoginAttempts(ctx, user.ID, newAttempt); err != nil {
+		if err := a.failedLoginsProvider.SaveFailedLoginAttempts(ctx, user.ID.String(), newAttempt); err != nil {
 			return "", fmt.Errorf("%s: %w", op, err)
 		}
 
 		return "", fmt.Errorf("%s: %w", op, ErrInvalidCredentials)
 	}
 
-	if err := a.failedLoginsProvider.RemoveFailedLoginAttempts(ctx, user.ID); err != nil {
+	if err := a.failedLoginsProvider.RemoveFailedLoginAttempts(ctx, user.ID.String()); err != nil {
 		return "", fmt.Errorf("%s: %w", op, err)
 	}
 
@@ -163,7 +154,7 @@ func (a *Auth) RegisterNewUser(ctx context.Context, email string, password strin
 		return uuid.Nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	user, err := a.userSaver.SaveUser(ctx, email, passwordHash)
+	user, err := a.userSaver.SaveUser(ctx, uuid.New().String(), email, passwordHash)
 	if err != nil {
 		if errors.Is(err, storage.ErrUserExists) {
 			log.Error("user exists", sl.Err(err))
@@ -205,7 +196,7 @@ func (a *Auth) CreateApp(ctx context.Context, name, secret string) (uuid.UUID, e
 	log := a.log.With("op", op)
 	log.Info("creating new app")
 
-	app, err := a.appProvider.CreateApp(ctx, name, secret)
+	app, err := a.appProvider.CreateApp(ctx, uuid.New().String(), name, secret)
 	if err != nil {
 		if errors.Is(err, storage.ErrAppExists) {
 			log.Error("app exists", sl.Err(err))

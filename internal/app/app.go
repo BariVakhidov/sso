@@ -10,7 +10,7 @@ import (
 	storageapp "github.com/BariVakhidov/sso/internal/app/storage"
 	redisapp "github.com/BariVakhidov/sso/internal/app/storage/redis"
 	"github.com/BariVakhidov/sso/internal/config"
-	"github.com/BariVakhidov/sso/internal/services/auth"
+	authservice "github.com/BariVakhidov/sso/internal/services/auth"
 )
 
 type App struct {
@@ -27,7 +27,7 @@ func New(log *slog.Logger, grpcPort int, storagePath string, ttl time.Duration, 
 
 	redisApp := redisapp.New(log, addr.Redis, time.Minute*10)
 
-	auth := auth.New(
+	authService := authservice.New(
 		log,
 		storage.Storage,
 		storage.Storage,
@@ -43,7 +43,7 @@ func New(log *slog.Logger, grpcPort int, storagePath string, ttl time.Duration, 
 		StoragePath: storagePath,
 		TTL:         ttl,
 	}
-	grpcApp := grpcapp.New(grpcappOpts, auth, metrics, metrics.RecoveryOpt, metrics.MetricsInterceptor)
+	grpcApp := grpcapp.New(grpcappOpts, authService, metrics, metrics.RecoveryOpt, metrics.MetricsInterceptor)
 
 	return &App{grpcServer: grpcApp, storage: storage, metrics: metrics, redisStorage: redisApp}
 }

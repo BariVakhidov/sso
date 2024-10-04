@@ -8,7 +8,6 @@ import (
 
 	"github.com/BariVakhidov/sso/internal/domain/models"
 	"github.com/BariVakhidov/sso/internal/storage"
-	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -27,10 +26,10 @@ func New(addr string, ttl time.Duration) *Storage {
 	return &Storage{client: client, ttl: ttl}
 }
 
-func (s *Storage) FailedLoginAttempts(ctx context.Context, userId uuid.UUID) (models.FailedLogin, error) {
+func (s *Storage) FailedLoginAttempts(ctx context.Context, userId string) (models.FailedLogin, error) {
 	const op = "storage.redis.FailedLoginAttempts"
 
-	data := s.client.Get(ctx, fmt.Sprintf("failedLogin:%s", userId.String())).Val()
+	data := s.client.Get(ctx, fmt.Sprintf("failedLogin:%s", userId)).Val()
 
 	if len(data) == 0 {
 		return models.FailedLogin{}, fmt.Errorf("%s: %w", op, storage.ErrFailedLoginNotFound)
@@ -45,17 +44,17 @@ func (s *Storage) FailedLoginAttempts(ctx context.Context, userId uuid.UUID) (mo
 	return failedLoginAttempt, nil
 }
 
-func (s *Storage) RemoveFailedLoginAttempts(ctx context.Context, userId uuid.UUID) error {
+func (s *Storage) RemoveFailedLoginAttempts(ctx context.Context, userId string) error {
 	const op = "storage.redis.RemoveFailedLoginAttempts"
 
-	if err := s.client.Del(ctx, fmt.Sprintf("failedLogin:%s", userId.String())).Err(); err != nil {
+	if err := s.client.Del(ctx, fmt.Sprintf("failedLogin:%s", userId)).Err(); err != nil {
 		return fmt.Errorf("%s: %w", op, err)
 	}
 
 	return nil
 }
 
-func (s *Storage) SaveFailedLoginAttempts(ctx context.Context, userId uuid.UUID, failedLoginAttempt models.FailedLogin) error {
+func (s *Storage) SaveFailedLoginAttempts(ctx context.Context, userId string, failedLoginAttempt models.FailedLogin) error {
 	const op = "storage.redis.SaveFailedLoginAttempts"
 
 	data, err := json.Marshal(failedLoginAttempt)
@@ -63,7 +62,7 @@ func (s *Storage) SaveFailedLoginAttempts(ctx context.Context, userId uuid.UUID,
 		return fmt.Errorf("%s: %w", op, err)
 	}
 
-	if err = s.client.Set(ctx, fmt.Sprintf("failedLogin:%s", userId.String()), string(data), s.ttl).Err(); err != nil {
+	if err = s.client.Set(ctx, fmt.Sprintf("failedLogin:%s", userId), string(data), s.ttl).Err(); err != nil {
 		return fmt.Errorf("%s: %w", op, err)
 	}
 

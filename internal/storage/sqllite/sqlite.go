@@ -27,7 +27,7 @@ func New(storagePath string) (*Storage, error) {
 	return &Storage{db: db}, nil
 }
 
-func (s *Storage) SaveUser(ctx context.Context, email string, passHash []byte) (models.User, error) {
+func (s *Storage) SaveUser(ctx context.Context, userID, email string, passHash []byte) (models.User, error) {
 	const op = "storage.sqlite.SaveUser"
 
 	stmt, err := s.db.Prepare("INSERT INTO users(id,email,pass_hash) VALUES(?,?,?) RETURNING id,email,pass_hash")
@@ -37,7 +37,7 @@ func (s *Storage) SaveUser(ctx context.Context, email string, passHash []byte) (
 
 	user := models.User{}
 
-	row := stmt.QueryRowContext(ctx, uuid.New(), email, passHash)
+	row := stmt.QueryRowContext(ctx, userID, email, passHash)
 	if err := row.Scan(&user.ID, &user.Email, &user.PassHash); err != nil {
 		var sqliteErr sqlite3.Error
 		if errors.As(err, &sqliteErr) && sqliteErr.ExtendedCode == sqlite3.ErrConstraintUnique {
@@ -135,7 +135,7 @@ func (s *Storage) FindApp(ctx context.Context, name string) (models.App, error) 
 	return app, nil
 }
 
-func (s *Storage) CreateApp(ctx context.Context, name string, secret string) (models.App, error) {
+func (s *Storage) CreateApp(ctx context.Context, appID, name string, secret string) (models.App, error) {
 	const op = "storage.sqlite.CreateApp"
 
 	stmt, err := s.db.Prepare("INSERT INTO apps(id,name,secret) VALUES(?,?,?) RETURNING id,name,secret")
@@ -143,7 +143,7 @@ func (s *Storage) CreateApp(ctx context.Context, name string, secret string) (mo
 		return models.App{}, fmt.Errorf("%s: %w", op, err)
 	}
 
-	res := stmt.QueryRowContext(ctx, uuid.New(), name, secret)
+	res := stmt.QueryRowContext(ctx, appID, name, secret)
 
 	var app models.App
 	if err := res.Scan(&app.ID, &app.Name, &app.Secret); err != nil {
