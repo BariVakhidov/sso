@@ -19,7 +19,6 @@ import (
 	"google.golang.org/grpc/peer"
 )
 
-
 type Auth struct {
 	log                  *slog.Logger
 	userSaver            UserSaver

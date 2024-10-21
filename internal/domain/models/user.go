@@ -7,3 +7,8 @@ type User struct {
 	Email    string
 	PassHash []byte
 }
+
+type UserEvent struct {
+	ID    uuid.UUID
+	Email string
+}

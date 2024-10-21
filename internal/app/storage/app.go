@@ -13,7 +13,7 @@ type App struct {
 }
 
 func MustCreateApp(dbAddr string, log *slog.Logger) *App {
-	postgres, err := postgres.New(dbAddr)
+	postgres, err := postgres.New(log, dbAddr)
 	if err != nil {
 		panic(err)
 	}

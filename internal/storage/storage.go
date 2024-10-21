@@ -8,4 +8,9 @@ var (
 	ErrUserNotFound        = errors.New("user not found")
 	ErrAppNotFound         = errors.New("app not found")
 	ErrFailedLoginNotFound = errors.New("failed login not found")
+	ErrEventsNotFound      = errors.New("events not found")
+)
+
+const (
+	EventUserCreated = "user_created"
 )
