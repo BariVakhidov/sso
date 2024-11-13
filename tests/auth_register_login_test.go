@@ -178,7 +178,7 @@ func TestBruteforceLogin(t *testing.T) {
 		Password: generatePassword(),
 		AppId:    appID,
 	})
-	assertErrCode(t, err, codes.InvalidArgument, auth.ErrAccountTemporaryLocked)
+	assertErrCode(t, err, codes.Unavailable, auth.ErrAccountTemporaryLocked)
 
 	time.Sleep(authService.BaseLockoutDuration)
 	assertLogin(t, ctx, email, password, appID, registerResp.GetUserId(), secret, suite)
