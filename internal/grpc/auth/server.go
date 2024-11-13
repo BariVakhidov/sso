@@ -72,7 +72,7 @@ func (s *ServerAPI) Login(ctx context.Context, req *ssov1.LoginRequest) (*ssov1.
 		}
 
 		if errors.Is(err, auth.ErrAccountIsLocked) {
-			return nil, status.Error(codes.InvalidArgument, ErrAccountTemporaryLocked)
+			return nil, status.Error(codes.Unavailable, ErrAccountTemporaryLocked)
 		}
 
 		return nil, status.Error(codes.Internal, ErrInternal)

@@ -14,7 +14,7 @@ func NewToken(user *models.User, app models.App, duration time.Duration) (string
 
 	claims := token.Claims.(jwt.MapClaims)
 	claims["email"] = user.Email
-	claims["uid"] = user.ID
+	claims["uid"] = user.ID.String()
 	claims["exp"] = time.Now().Add(duration).Unix()
 	claims["app_id"] = app.ID
 

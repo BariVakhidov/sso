@@ -100,6 +100,7 @@ func (a *Auth) Login(ctx context.Context, email string, password string, appID u
 	failedLoginAttempt, err := a.failedLoginsProvider.FailedLoginAttempts(ctx, user.ID.String())
 	isFirstAttempt := errors.Is(err, storage.ErrFailedLoginNotFound)
 	if err != nil && !isFirstAttempt {
+		log.Error("failed to check failedLoginAttempt", slog.String("userID", user.ID.String()))
 		return "", fmt.Errorf("%s: %w", op, err)
 	}
 
@@ -115,6 +116,7 @@ func (a *Auth) Login(ctx context.Context, email string, password string, appID u
 
 		newAttempt := a.handleFailedLogin(user.ID, failedLoginAttempt, isFirstAttempt)
 		if err := a.failedLoginsProvider.SaveFailedLoginAttempts(ctx, user.ID.String(), newAttempt); err != nil {
+			log.Warn("failed to save failedLoginAttempt", slog.String("userID", user.ID.String()))
 			return "", fmt.Errorf("%s: %w", op, err)
 		}
 
@@ -122,17 +124,19 @@ func (a *Auth) Login(ctx context.Context, email string, password string, appID u
 	}
 
 	if err := a.failedLoginsProvider.RemoveFailedLoginAttempts(ctx, user.ID.String()); err != nil {
+		log.Error("failed to remove failedLoginAttempt", slog.String("userID", user.ID.String()))
 		return "", fmt.Errorf("%s: %w", op, err)
 	}
 
 	app, err := a.appProvider.App(ctx, appID)
 	if err != nil {
+		log.Error("failed to get app", slog.String("appID", appID.String()))
 		return "", fmt.Errorf("%s: %w", op, err)
 	}
 
 	token, err := jwt.NewToken(&user, app, a.tokenTTL)
 	if err != nil {
-		a.log.Error("failed to generate token", sl.Err(err))
+		log.Error("failed to generate token", sl.Err(err))
 		return "", fmt.Errorf("%s: %w", op, err)
 	}
 
