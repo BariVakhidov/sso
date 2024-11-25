@@ -12,6 +12,7 @@ import (
 	ssov1 "github.com/BariVakhidov/ssoprotos/gen/go/sso"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
@@ -37,11 +38,13 @@ func New(opts AppOpts, auth auth.AuthService, metrics Metrics, recoveryOpt recov
 		logging.WithLogOnEvents(logging.PayloadSent, logging.PayloadReceived),
 	}
 
-	gRPCServer := grpc.NewServer(grpc.ChainUnaryInterceptor(
-		metricsInterceptor,
-		logging.UnaryServerInterceptor(InterceptorLogger(opts.Log), logOpts...),
-		recovery.UnaryServerInterceptor(recoveryOpt),
-	))
+	gRPCServer := grpc.NewServer(
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
+		grpc.ChainUnaryInterceptor(
+			metricsInterceptor,
+			logging.UnaryServerInterceptor(InterceptorLogger(opts.Log), logOpts...),
+			recovery.UnaryServerInterceptor(recoveryOpt),
+		))
 
 	metrics.Initialize(gRPCServer)
 	reflection.Register(gRPCServer)
@@ -87,7 +90,6 @@ func (a *App) Stop() {
 }
 
 // InterceptorLogger adapts slog logger to interceptor logger.
-// This code is simple enough to be copied and not imported.
 func InterceptorLogger(l *slog.Logger) logging.Logger {
 	return logging.LoggerFunc(func(ctx context.Context, lvl logging.Level, msg string, fields ...any) {
 		l.Log(ctx, slog.Level(lvl), msg, fields...)

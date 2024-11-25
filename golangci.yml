@@ -1,5 +1,5 @@
 run:
-  go: 1.22.2
+  go: 1.23.3
   concurrency: 4
   timeout: 10m
 
@@ -8,7 +8,7 @@ linters:
   enable:
     - errcheck
     - asciicheck
-    - exportloopref
+    - copyloopvar
     - gofmt
     - goimports
     - gomodguard

@@ -16,6 +16,7 @@ import (
 	"github.com/BariVakhidov/sso/internal/storage"
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc/peer"
 )
 
@@ -27,6 +28,7 @@ type Auth struct {
 	tokenTTL             time.Duration
 	failedLogins         *prometheus.CounterVec
 	failedLoginsProvider FailedLoginProvider
+	tracer               trace.Tracer
 }
 
 type FailedLoginProvider interface {
@@ -65,6 +67,7 @@ func New(
 	failedLoginsProvider FailedLoginProvider,
 	tokenTTL time.Duration,
 	failedLogins *prometheus.CounterVec,
+	tracer trace.Tracer,
 ) *Auth {
 	return &Auth{
 		log:                  log,
@@ -74,6 +77,7 @@ func New(
 		tokenTTL:             tokenTTL,
 		failedLogins:         failedLogins,
 		failedLoginsProvider: failedLoginsProvider,
+		tracer:               tracer,
 	}
 }
 
@@ -84,6 +88,9 @@ func (a *Auth) Login(ctx context.Context, email string, password string, appID u
 		slog.String("username", email),
 	)
 	log.Info("attempting to login user")
+
+	ctx, span := a.tracer.Start(ctx, op)
+	defer span.End()
 
 	user, err := a.userProvider.User(ctx, email)
 	if err != nil {
@@ -150,6 +157,9 @@ func (a *Auth) RegisterNewUser(ctx context.Context, email string, password strin
 		slog.String("email", email),
 	)
 	log.Info("registering new user")
+
+	ctx, span := a.tracer.Start(ctx, op)
+	defer span.End()
 
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
